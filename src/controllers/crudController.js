@@ -1,6 +1,7 @@
 const express = require("express");
 const app = express();
-
+const { postSchemas } = require('../schemas/postSchemas');
+const { postUpdation } = require('../schemas/postSchemas');
 
 require('dotenv').config({ path: 'dev.env'});
 const axios = require("axios");
@@ -38,59 +39,88 @@ exports.getPostbyId = async (req, res) => {
     }
 };
 
-exports.createPost = [
-  async (req, res) => {
-    try {
-      const { userId, title, body } = req.body;
+exports.createPost = async (req, res) => {
+  try {
+    console.log("BODY:", req.body);
+    console.log("FILES:", req.files);
 
-      const response = await axios.get(`https://jsonplaceholder.typicode.com/posts`);
-      const posts = response.data;
+    const validatedData = postSchemas.parse(req.body);
 
-      const id = posts.length ? posts[posts.length - 1].id + 1 : 1;
-      const newPost = { id, userId, title, body };
+    const { userId, title, body } = validatedData;
 
-      if (req.files) {
+    const response = await axios.get('https://jsonplaceholder.typicode.com/posts');
+    const posts = response.data;
+
+    const id = posts.length ? posts[posts.length - 1].id + 1 : 1;
+    const newPost = { id, userId, title, body };
+
+    if (req.files) {
         console.log("Uploaded files:", req.files);
       }
 
       posts.push(newPost);
 
-      return res.status(201).json({
-        message: "Post Created Successfully",
-        post: newPost,
-        uploadedFiles: req.files || []
+    return res.status(201).json({
+      message: "Post created successfully",
+      data: newPost,
+      files: req.files || []
+    });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({
+        message: "Validation failed",
+        errors: error.errors
       });
-
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Something went wrong" });
     }
+
+    console.error("Error creating post:", error.message);
+    res.status(500).json({ message: "Internal server error" });
   }
-];
+};
+exports.updatePostById = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
 
-exports.updatePostbyId =  async (req, res) => {
-    try{
-        const id = parseInt(req.params.id);
-        const response = await axios.get(`https://jsonplaceholder.typicode.com/posts`);
+    const validation = postUpdation.safeParse(req.body);
 
-        const {title, body} = req.body;
-        
-        const post = response.data.find(p => p.id === id);
-
-        if (!post) return res.send("Post not found");
-
-        post.title = title || post.title;
-        post.body = body || post.body;
-
-        return res.send({
-            message: "Post Updated",
-            post
-        });
-
-    }catch(err){
-       return res.status(500).send({error: "Error"});
-       console.log(err);
+    if (!validation.success) {
+      return res.status(400).json({
+        message: "Validation failed",
+        errors: validation.error.errors.map(err => ({
+          field: err.path.join("."),
+          message: err.message,
+        })),
+      });
     }
+
+    const { title, body } = validation.data;
+
+    const response = await axios.get(
+      `https://jsonplaceholder.typicode.com/posts/${id}`
+    );
+    const existingPost = response.data;
+
+    if (!existingPost) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    const updatedPost = {
+      ...existingPost,
+      title: title || existingPost.title,
+      body: body || existingPost.body,
+    };
+
+    return res.status(200).json({
+      message: "Post updated successfully",
+      data: updatedPost,
+    });
+  } catch (error) {
+    console.error("Error updating post:", error.message);
+    res.status(500).json({
+      message: "Internal server error",
+      details: error.message,
+    });
+  }
 };
 
 exports.deletePostbyId = async (req, res) => {
