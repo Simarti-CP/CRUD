@@ -1,0 +1,7 @@
+event loop checks the event queue (consisting of all requests)
+request can be either synchronous(blocking) or asynchronous(non-blocking)
+if the request is asynchronous then the response is generated and sent back to the client
+but for synchronous request it will be sent to the thread pool and assigned a thread
+
+
+input validations, multiple file upload, datatype validations, middleware, eventloop 
